@@ -6,6 +6,9 @@ About
 
 mod-host is an LV2 host for JACK, controllable via socket or command line
 
+This fork contains an additional preset-loading fix used by MODEP: for `file://...` preset URIs, it loads LV2 preset state via `lilv_state_new_from_file()` (instead of only using `lilv_state_new_from_world()`).
+This makes large "full-state" presets (notably Modartt Pianoteq `...:StateString`) reliably loadable via the `preset_load` command.
+
 Currently the host supports the following LV2 features:
 
 * lv2core
