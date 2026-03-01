@@ -5977,7 +5977,22 @@ int effects_preset_load(int effect_id, const char *uri)
 
         if (preset_uri && lilv_world_load_resource(g_lv2_data, preset_uri) >= 0)
         {
-            LilvState* state = lilv_state_new_from_world(g_lv2_data, &g_urid_map, preset_uri);
+            LilvState* state;
+
+            // Prefer loading directly from file when possible.
+            // This handles large state blobs more reliably than loading through the world model.
+            if (strncmp(uri, "file://", 7) == 0)
+            {
+                const char* const path = lilv_file_uri_parse(uri, NULL);
+                state = (path != NULL) ? lilv_state_new_from_file(g_lv2_data, &g_urid_map, NULL, path) : NULL;
+                if (path != NULL)
+                    free((void*)path);
+            }
+            else
+            {
+                state = lilv_state_new_from_world(g_lv2_data, &g_urid_map, preset_uri);
+            }
+
             if (!state)
             {
                 lilv_node_free(preset_uri);
@@ -5986,8 +6001,17 @@ int effects_preset_load(int effect_id, const char *uri)
 
             effect = &g_effects[effect_id];
 
+            // Some plugins (notably large instruments) only fully apply a restored state
+            // when deactivated. Temporarily deactivate around state restore.
+            const bool was_activated = effect->activated;
+            if (was_activated)
+                lilv_instance_deactivate(effect->lilv_instance);
+
             lilv_state_restore(state, effect->lilv_instance, SetParameterFromState, effect,
                                LV2_STATE_IS_POD|LV2_STATE_IS_PORTABLE, effect->features);
+
+            if (was_activated)
+                lilv_instance_activate(effect->lilv_instance);
             lilv_state_free(state);
             lilv_node_free(preset_uri);
 
@@ -6072,7 +6096,21 @@ int effects_preset_show(const char *uri, char **state_str)
 
     if (lilv_world_load_resource(g_lv2_data, preset_uri) >= 0)
     {
-        LilvState* state = lilv_state_new_from_world(g_lv2_data, &g_urid_map, preset_uri);
+        LilvState* state;
+
+        // Prefer loading directly from file when possible.
+        if (strncmp(uri, "file://", 7) == 0)
+        {
+            const char* const path = lilv_file_uri_parse(uri, NULL);
+            state = (path != NULL) ? lilv_state_new_from_file(g_lv2_data, &g_urid_map, NULL, path) : NULL;
+            if (path != NULL)
+                free((void*)path);
+        }
+        else
+        {
+            state = lilv_state_new_from_world(g_lv2_data, &g_urid_map, preset_uri);
+        }
+
         if (!state)
         {
             lilv_node_free(preset_uri);
